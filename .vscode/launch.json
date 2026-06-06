@@ -55,6 +55,8 @@
                 "/home/davide/Scaricati/arc2concept-aug-1000",
                 "--device", "cpu",
                 "--split", "train",
+                "--global-batch-size", "2",
+                "--max-samples", "4"
             ],
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"

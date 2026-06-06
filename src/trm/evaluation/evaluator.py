@@ -2,8 +2,10 @@
 
 import os
 from typing import Optional, List, Any
+from pathlib import Path
 import torch
 import torch.distributed as dist
+import numpy as np
 
 from trm.training.config import PretrainConfig, TrainState
 from trm.utils import load_model_class
@@ -44,7 +46,8 @@ def evaluate(
     rank: int,
     world_size: int,
     cpu_group: Optional[dist.ProcessGroup],
-    device: str = 'cuda'
+    device: str = 'cuda',
+    save_traj: bool = False
 ):
     """Run evaluation on test set.
     
@@ -88,6 +91,8 @@ def evaluate(
         
         items = 0
         set_name = 'all'
+
+        trajectories = []
        
         for inputs, labels, puzzle_identifiers in eval_loader:
             items += inputs.shape[0]
@@ -108,14 +113,26 @@ def evaluate(
 
             # Forward
             inference_steps = 0
-            while True:
+
+            if save_traj:
+                B, T, S = carry.inner_carry.z_H.shape
+                traj = np.zeros((config.arch.halt_max_steps, B, T, S), dtype=np.float32) # type: ignore
+
+            while inference_steps < 2:
                 carry, loss, metrics, preds, all_finish = train_state.model(
                     carry=carry, batch=batch, return_keys=return_keys
                 )
+
+                if save_traj:
+                    traj[inference_steps] = carry.inner_carry.z_H.float().cpu().numpy()
+
                 inference_steps += 1
 
                 if all_finish:
                     break
+            
+            if save_traj:
+                trajectories.append(traj)
 
             if rank == 0:
                 print(f"  Completed inference in {inference_steps} steps")
@@ -158,6 +175,14 @@ def evaluate(
             torch.save(
                 save_preds, os.path.join(config.checkpoint_path, f"step_{train_state.step}_all_preds.{rank}")
             )
+
+        if save_traj:
+            print('Saved trajectories')
+
+            trajectories = np.concatenate(trajectories, axis=1)  # [STEPS, ALL_SAMPLES, T, S]
+            trajectories = np.transpose(trajectories, (1, 0, 2, 3)) # [ALL_SAMPLES × STEPS × T × S]
+
+            np.savez(Path(config.checkpoint_path) / f"y_trajectories.npz", y_trajectories=trajectories) # type: ignore
 
         del save_preds
 
@@ -211,3 +236,79 @@ def evaluate(
             print("All evaluators completed!")
 
     return reduced_metrics
+
+
+
+
+def save_trajectories(
+    config: PretrainConfig,
+    train_state: TrainState,
+    eval_loader: torch.utils.data.DataLoader,
+    rank: int,
+    device: str = 'cuda',
+    N_sup: int = 16
+):
+    with torch.inference_mode():
+        return_keys = set(config.eval_save_outputs)
+        save_preds = {}
+
+        carry = None
+        processed_batches = 0
+        
+        items = 0
+        set_name = 'all'
+
+        trajectories = []
+       
+        for inputs, labels, puzzle_identifiers in eval_loader:
+            items += inputs.shape[0]
+            processed_batches += 1
+            
+            if rank == 0:
+                print(f"Processing batch {processed_batches}: {set_name}")
+            
+            # To device
+            batch = {
+                "inputs": inputs.to(device),
+                "labels": labels.to(device),
+                "puzzle_identifiers": puzzle_identifiers.to(device)
+            }
+            
+            with torch.device(device):
+                carry = train_state.model.initial_carry(batch)  # type: ignore
+
+
+            B, T, S = carry.inner_carry.z_H.shape
+            traj = np.zeros((N_sup, B, T, S), dtype=np.float32) # type: ignore
+
+            for step in range(N_sup):
+                carry, _, _, _, _ = train_state.model(
+                    carry=carry, batch=batch, return_keys=return_keys
+                )
+
+                traj[step] = carry.inner_carry.z_H.float().cpu().numpy()
+            
+            trajectories.append(traj)
+
+
+        print(items)
+
+        # concatenate save preds
+        save_preds = {k: torch.cat(v, dim=0) for k, v in save_preds.items()}
+
+        # Save preds
+        if config.checkpoint_path is not None and len(save_preds):
+            # Each rank save predictions independently
+            os.makedirs(os.path.dirname(config.checkpoint_path), exist_ok=True)
+            torch.save(
+                save_preds, os.path.join(config.checkpoint_path, f"step_{train_state.step}_all_preds.{rank}")
+            )
+
+        trajectories = np.concatenate(trajectories, axis=1)  # [STEPS, ALL_SAMPLES, T, S]
+        trajectories = np.transpose(trajectories, (1, 0, 2, 3)) # [ALL_SAMPLES × STEPS × T × S]
+
+        np.savez(Path(config.checkpoint_path) / f"y_trajectories.npz", y_trajectories=trajectories) # type: ignore
+
+        print('Saved data')
+
+        del save_preds, trajectories

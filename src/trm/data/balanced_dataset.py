@@ -13,7 +13,8 @@ def build_balanced_dataset(
     split: str = "train",
     set_name: str = "all",
     num_examples_per_puzzle: int = 3,
-    seed: int = 42
+    seed: int = 42,
+    max_samples: int | None = None
 ):
     rng = np.random.default_rng(seed)
     
@@ -67,7 +68,13 @@ def build_balanced_dataset(
                 selected_puzzle_ids.append(puzzle_ids[p_idx])
 
     indices_to_extract = list(selected_global_examples)
-    print(f"Numero di esempi unici selezionati finali: {len(indices_to_extract)}")
+
+    if max_samples is not None and max_samples < len(indices_to_extract):
+        indices_to_extract = indices_to_extract[:max_samples]
+        selected_puzzle_ids = selected_puzzle_ids[:max_samples]
+        print(f"Dataset troncato a max_samples. Campioni estratti: {len(indices_to_extract)}")
+    else:
+        print(f"Numero di esempi unici selezionati finali: {len(indices_to_extract)}")
 
     total_selected_examples = len(indices_to_extract)
     
