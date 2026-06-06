@@ -244,9 +244,10 @@ def save_trajectories(
     config: PretrainConfig,
     train_state: TrainState,
     eval_loader: torch.utils.data.DataLoader,
+    traj_path: Path,
     rank: int,
     device: str = 'cuda',
-    N_sup: int = 16
+    N_sup: int = 16,
 ):
     with torch.inference_mode():
         return_keys = set(config.eval_save_outputs)
@@ -307,7 +308,7 @@ def save_trajectories(
         trajectories = np.concatenate(trajectories, axis=1)  # [STEPS, ALL_SAMPLES, T, S]
         trajectories = np.transpose(trajectories, (1, 0, 2, 3)) # [ALL_SAMPLES × STEPS × T × S]
 
-        np.savez(Path(config.checkpoint_path) / f"y_trajectories.npz", y_trajectories=trajectories) # type: ignore
+        np.savez(traj_path, y_trajectories=trajectories) # type: ignore
 
         print('Saved data')
 

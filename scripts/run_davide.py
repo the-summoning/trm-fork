@@ -1,6 +1,6 @@
 
 import os
-import json
+from pathlib import Path
 import sys
 import argparse
 import yaml
@@ -69,6 +69,7 @@ def parse_args():
     p.add_argument('--no-bf16', dest='bf16', action='store_false', help='Disable bfloat16 autocast during evaluation')
     p.add_argument('--device', default='cuda')
     p.add_argument('--k', type=int, default=1, help='K')
+    p.add_argument('--traj-path', type=Path, default=1, help='K')
 
     return p.parse_args()
 
@@ -235,7 +236,8 @@ def main():
             eval_loader=cast(Any, eval_loader),
             rank=RANK,
             device=args.device,
-            N_sup=config.arch.halt_max_steps # type: ignore
+            N_sup=config.arch.halt_max_steps, # type: ignore
+            traj_path=args.traj_path
         )
 
 
