@@ -22,7 +22,7 @@ def save_train_state(config: PretrainConfig, train_state: TrainState):
     torch.save(train_state.model.state_dict(), os.path.join(config.checkpoint_path, f"step_{train_state.step}"))
 
 
-def load_checkpoint(model: nn.Module, config: PretrainConfig):
+def load_checkpoint(model: nn.Module, config: PretrainConfig, device: str = 'cuda'):
     """Load model checkpoint from disk or HuggingFace.
     
     Args:
@@ -62,7 +62,7 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig):
                 raise RuntimeError(f"Failed to download checkpoint from HuggingFace: {e}")
 
         # Load state dict
-        state_dict = torch.load(checkpoint_path, map_location="cuda")
+        state_dict = torch.load(checkpoint_path, map_location=device)
 
         # Always strip compile/DataParallel style prefixes so keys match the
         # non-compiled module. We won't be using torch.compile in eval.

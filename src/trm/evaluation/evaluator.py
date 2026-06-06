@@ -44,6 +44,7 @@ def evaluate(
     rank: int,
     world_size: int,
     cpu_group: Optional[dist.ProcessGroup],
+    device: str = 'cuda'
 ):
     """Run evaluation on test set.
     
@@ -85,14 +86,24 @@ def evaluate(
         carry = None
         processed_batches = 0
         
-        for set_name, batch, global_batch_size in eval_loader:
+        items = 0
+        set_name = 'all'
+       
+        for inputs, labels, puzzle_identifiers in eval_loader:
+            items += inputs.shape[0]
             processed_batches += 1
+            
             if rank == 0:
                 print(f"Processing batch {processed_batches}: {set_name}")
             
             # To device
-            batch = {k: v.cuda() for k, v in batch.items()}
-            with torch.device("cuda"):
+            batch = {
+                "inputs": inputs.to(device),
+                "labels": labels.to(device),
+                "puzzle_identifiers": puzzle_identifiers.to(device)
+            }
+            
+            with torch.device(device):
                 carry = train_state.model.initial_carry(batch)  # type: ignore
 
             # Forward
@@ -128,12 +139,14 @@ def evaluate(
                     sorted(metrics.keys())
                 )  # Sort keys to guarantee all processes use the same order.
                 metric_values = torch.zeros(
-                    (len(set_ids), len(metrics.values())), dtype=torch.float32, device="cuda"
+                    (len(set_ids), len(metrics.values())), dtype=torch.float32, device=device
                 )
 
             metric_values[set_id] += torch.stack([metrics[k] for k in metric_keys])
 
             del metrics
+
+        print(items)
 
         # concatenate save preds
         save_preds = {k: torch.cat(v, dim=0) for k, v in save_preds.items()}

@@ -1,27 +1,14 @@
 
-"""Distributed evaluation runner using the trm library.
-
-This script constructs a PretrainConfig from a YAML file (default: config/cfg_pretrain.yaml),
-overrides a few fields from the CLI (checkpoint path, dataset path, eval_save_outputs),
-creates the test dataloader and model (loading checkpoint), and runs evaluate()
-using the trm library functions. It is safe to run with torchrun for multi-GPU evaluation.
-
-Example (single-process, local checkpoint):
-  python scripts/run_eval_only.py --checkpoint /path/to/step_50000 --dataset data/maze-30x30-hard-1k
-
-Example (single-process, HuggingFace checkpoint):
-  python scripts/run_eval_only.py --checkpoint alphaXiv/trm-model-maze/maze_hard_step_32550 --dataset data/maze-30x30-hard-1k
-
-Example (distributed via torchrun):
-  torchrun --nproc_per_node=8 scripts/run_eval_only.py --checkpoint /path/to/step_50000 --dataset /data/maze-30x30-hard-1k
-"""
-
 import os
 import json
 import sys
 import argparse
 import yaml
 import copy
+
+from torch.utils.data import DataLoader
+
+from trm.data.balanced_dataset import build_balanced_dataset
 
 # Add project root to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -41,7 +28,6 @@ import math
 # Import functions and classes from trm library
 from trm.training import (
     PretrainConfig,
-    create_dataloader,
     init_train_state,
 )
 from trm.evaluation import (
@@ -71,6 +57,7 @@ def parse_args():
     p.add_argument('--config', default='config/cfg_pretrain.yaml', help='YAML config file (pydantic fields)')
     p.add_argument('--checkpoint', required=True, help='Path to model checkpoint file. Local path or HuggingFace format: "username/repo/filename"')
     p.add_argument('--dataset', required=True, help='Path to dataset directory to evaluate (overrides data_paths_test)')
+    p.add_argument('--split', required=True, help='Split of dataset')
     p.add_argument('--outdir', default=None, help='Directory to save evaluation preds (overrides checkpoint_path in config)')
     p.add_argument('--eval-save-outputs', nargs='+', default=['inputs','labels','puzzle_identifiers','preds'], help='List of keys to save during evaluation')
     p.add_argument('--global-batch-size', type=int, default=None, help='Global batch size override for evaluation')
@@ -84,7 +71,6 @@ def parse_args():
     p.add_argument('--no-apply-ema', dest='apply_ema', action='store_false', help='Disable EMA application during evaluation')
     p.add_argument('--no-eval-only', dest='eval_only', action='store_false', help='Disable eval-only (will construct optimizer); not recommended')
     p.add_argument('--no-bf16', dest='bf16', action='store_false', help='Disable bfloat16 autocast during evaluation')
-    p.add_argument('--one-batch', action='store_true', help='Evaluate only a single random batch of size global_batch_size from the test split (faster smoke test).')
     p.add_argument('--device', default='cuda')
 
     return p.parse_args()
@@ -179,39 +165,25 @@ def main():
 
     # Create dataloaders
     try:
-        if args.one_batch:
-            # one-batch: take a single random batch from test split
-            eval_loader_full, eval_metadata = create_dataloader(
-                config, 'test', rank=RANK, world_size=WORLD_SIZE,
-                test_set_mode=False, epochs_per_iter=1, global_batch_size=config.global_batch_size
-            )
-            it = iter(eval_loader_full)
-            try:
-                first = next(it)
-            except StopIteration:
-                if RANK == 0:
-                    print('NO EVAL DATA FOUND')
-                return
-
-            if RANK == 0:
-                print('one-batch mode: evaluating a single random batch from test split')
-
-            def one_batch_iter():
-                """Yield exactly one pre-fetched batch for quick smoke tests."""
-                yield first
-
-            eval_loader = one_batch_iter()
-        else:
-            eval_loader, eval_metadata = create_dataloader(
-                config, 'test', rank=RANK, world_size=WORLD_SIZE,
-                test_set_mode=True, epochs_per_iter=1, global_batch_size=config.global_batch_size
-            )
+        dataset, eval_metadata = build_balanced_dataset(
+            dataset_path=config.data_paths_test[0], 
+            split=args.split, 
+            set_name="all", 
+            num_examples_per_puzzle=1
+        )
+    
+        eval_loader = DataLoader(
+            dataset,
+            batch_size=config.global_batch_size,
+            num_workers=1,
+            prefetch_factor=8,
+            pin_memory=True,
+            persistent_workers=True
+        )
     except Exception:
         if RANK == 0:
             print('NO EVAL DATA FOUND')
         return
-
-    # Evaluate full test set unless one-batch is specified
 
     # Evaluators
     try:

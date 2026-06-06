@@ -1,0 +1,64 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Build ARC v1 Dataset",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "trm.data.build_arc_dataset",
+            "console": "integratedTerminal",
+            "args": [
+                "--input-file-prefix",
+                "kaggle/combined/arc-agi",
+                "--output-dir",
+                "data/arc1concept",
+                "--subsets",
+                "training",
+                "evaluation",
+                "concept",
+                "--test-set-name",
+                "evaluation",
+                "--num-aug", "0"
+            ]
+        },
+        {
+            "name": "Build ARC v2 Dataset",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "trm.data.build_arc_dataset",
+            "console": "integratedTerminal",
+            "args": [
+                "--input-file-prefix",
+                "kaggle/combined/arc-agi",
+                "--output-dir",
+                "data/arc2concept",
+                "--subsets",
+                "training2",
+                "evaluation2",
+                "concept",
+                "--test-set-name",
+                "evaluation2",
+                "--num-aug", "0"
+            ]
+        },
+        {
+            "name": "Run Eval Only",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/run_davide.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--checkpoint",
+                "/home/davide/Scaricati/trm_arc_prize_verification/arc_v2_public/step_723914",
+                "--dataset",
+                "/home/davide/Scaricati/arc2concept-aug-1000",
+                "--device", "cpu",
+                "--split", "train",
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+}

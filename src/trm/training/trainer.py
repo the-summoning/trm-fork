@@ -55,7 +55,7 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
     return dataloader, dataset.metadata
 
 
-def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, rank: int, world_size: int, is_eval: bool = False):
+def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, rank: int, world_size: int, is_eval: bool = False, device: str = 'cuda'):
     """Create and initialize model with loss head and optimizers.
     
     Args:
@@ -81,7 +81,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     model_cls = load_model_class(config.arch.name)
     loss_head_cls = load_model_class(config.arch.loss.name)
 
-    with torch.device("cuda"):
+    with torch.device(device):
         model: nn.Module = model_cls(model_cfg)
         print(model)
         model = loss_head_cls(model, **config.arch.loss.__pydantic_extra__)  # type: ignore
@@ -96,7 +96,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
 
         # Load checkpoint
         if rank == 0:
-            load_checkpoint(model, config)
+            load_checkpoint(model, config, device=device)
 
         # Broadcast parameters from rank 0
         if world_size > 1:
@@ -209,7 +209,7 @@ def compute_lr(base_lr: float, config: PretrainConfig, train_state: TrainState):
     )
 
 
-def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, rank: int, world_size: int, is_eval: bool = False):
+def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, rank: int, world_size: int, is_eval: bool = False, device: str = 'cuda'):
     """Initialize training state with model and optimizers.
     
     Args:
@@ -226,7 +226,7 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
     total_steps = int(config.epochs * train_metadata.total_groups * train_metadata.mean_puzzle_examples / config.global_batch_size)
 
     # Model
-    model, optimizers, optimizer_lrs = create_model(config, train_metadata, rank=rank, world_size=world_size, is_eval=is_eval)
+    model, optimizers, optimizer_lrs = create_model(config, train_metadata, rank=rank, world_size=world_size, is_eval=is_eval, device=device)
 
     return TrainState(
         step=0,
