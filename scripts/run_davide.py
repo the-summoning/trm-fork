@@ -68,6 +68,7 @@ def parse_args():
     p.add_argument('--no-eval-only', dest='eval_only', action='store_false', help='Disable eval-only (will construct optimizer); not recommended')
     p.add_argument('--no-bf16', dest='bf16', action='store_false', help='Disable bfloat16 autocast during evaluation')
     p.add_argument('--device', default='cuda')
+    p.add_argument('--k', type=int, default=1, help='K')
 
     return p.parse_args()
 
@@ -159,7 +160,7 @@ def main():
         dataset_path=config.data_paths_test[0], 
         split=args.split, 
         set_name="all", 
-        num_examples_per_puzzle=2,
+        num_examples_per_puzzle=args.k,
         max_samples=args.max_samples
     )
 
