@@ -69,7 +69,7 @@ def parse_args():
     p.add_argument('--no-bf16', dest='bf16', action='store_false', help='Disable bfloat16 autocast during evaluation')
     p.add_argument('--device', default='cuda')
     p.add_argument('--k', type=int, default=1, help='K')
-    p.add_argument('--traj-path', type=Path, default=1, help='K')
+    p.add_argument('--traj-dir', type=Path, default=Path('./trajectories'), help='K')
 
     return p.parse_args()
 
@@ -229,6 +229,8 @@ def main():
     else:
         amp_ctx = nullcontext()
 
+    args.traj_dir.mkdir(parents=True, exist_ok=True)
+
     with torch.inference_mode(), amp_ctx:
         save_trajectories(
             config=config,
@@ -237,7 +239,7 @@ def main():
             rank=RANK,
             device=args.device,
             N_sup=config.arch.halt_max_steps, # type: ignore
-            traj_path=args.traj_path
+            traj_dir=args.traj_dir
         )
 
 
