@@ -71,7 +71,8 @@ def parse_args():
     p.add_argument('--device', default='cuda')
     p.add_argument('--k', type=int, default=1, help='K')
     p.add_argument('--traj-dir', type=Path, default=Path('./trajectories'), help='K')
-    p.add_argument('--use-balanced-ds', action='store_true')
+    p.add_argument('--use-balanced-ds', action='store_true', default=False)
+    p.add_argument('--max-batches', type=int, default=None) # ?
 
     return p.parse_args()
 
@@ -261,7 +262,8 @@ def main():
             rank=RANK,
             device=args.device,
             N_sup=config.arch.halt_max_steps, # type: ignore
-            traj_dir=args.traj_dir
+            traj_dir=args.traj_dir,
+            max_batches=args.max_batches
         )
 
 
