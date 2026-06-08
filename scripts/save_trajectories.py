@@ -180,7 +180,7 @@ def main():
             num_replicas=1,
             test_set_mode=True,
             epochs_per_iter=1,
-            global_batch_size=args.batch_size
+            global_batch_size=config.global_batch_size
         )
         
         dataset = PuzzleDataset(dataset_config, split=args.split)
