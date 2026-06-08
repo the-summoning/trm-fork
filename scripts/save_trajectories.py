@@ -174,7 +174,7 @@ def main():
         print('Using standard PuzzleDataset')
 
         dataset_config = PuzzleDatasetConfig(
-            seed=args.seed,
+            seed=42,
             dataset_paths=[args.data_path],
             rank=0,
             num_replicas=1,
