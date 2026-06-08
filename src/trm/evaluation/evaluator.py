@@ -246,6 +246,8 @@ def save_trajectories(
     rank: int,
     device: str = 'cuda',
     N_sup: int = 16,
+    max_batches: int | None = None
+
 ):
     with torch.inference_mode():
         return_keys = set(config.eval_save_outputs)
@@ -258,6 +260,11 @@ def save_trajectories(
        
         for inputs, labels, puzzle_identifiers in eval_loader:
             items += inputs.shape[0]
+            
+            if max_batches is not None and processed_batches > max_batches:
+                print(f'Stopped at {max_batches}')
+                break
+
             processed_batches += 1
             
             if rank == 0:

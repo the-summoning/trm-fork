@@ -9,6 +9,7 @@ import copy
 from torch.utils.data import DataLoader
 
 from trm.data.balanced_dataset import build_balanced_dataset
+from trm.data.puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig
 from trm.evaluation.evaluator import save_trajectories
 
 # Add project root to Python path
@@ -70,6 +71,7 @@ def parse_args():
     p.add_argument('--device', default='cuda')
     p.add_argument('--k', type=int, default=1, help='K')
     p.add_argument('--traj-dir', type=Path, default=Path('./trajectories'), help='K')
+    p.add_argument('--use-balanced-ds', action='store_true')
 
     return p.parse_args()
 
@@ -157,13 +159,33 @@ def main():
     except Exception:
         pass
 
-    dataset, eval_metadata = build_balanced_dataset(
-        dataset_path=config.data_paths_test[0], 
-        split=args.split, 
-        set_name="all", 
-        num_examples_per_puzzle=args.k,
-        max_samples=args.max_samples
-    )
+    if args.use_balanced_ds:
+        print('Using balanced dataset')
+
+        dataset, metadata = build_balanced_dataset(
+            dataset_path=config.data_paths_test[0], 
+            split=args.split, 
+            set_name="all", 
+            num_examples_per_puzzle=args.k,
+            max_samples=args.max_samples
+        )
+    else:
+        print('Using standard PuzzleDataset')
+
+        dataset_config = PuzzleDatasetConfig(
+            seed=args.seed,
+            dataset_paths=[args.data_path],
+            rank=0,
+            num_replicas=1,
+            test_set_mode=True,
+            epochs_per_iter=1,
+            global_batch_size=args.batch_size
+        )
+        
+        dataset = PuzzleDataset(dataset_config, split=args.split)
+        metadata = dataset.metadata
+
+
 
     eval_loader = DataLoader(
         dataset,
@@ -176,7 +198,7 @@ def main():
 
     # Init model & train_state (loads checkpoint on rank 0 inside create_model).
     # Pass is_eval according to CLI flag to skip optimizer construction in evaluation-only runs.
-    train_state = init_train_state(config, eval_metadata, rank=RANK, world_size=WORLD_SIZE, is_eval=bool(args.eval_only), device=args.device)
+    train_state = init_train_state(config, metadata, rank=RANK, world_size=WORLD_SIZE, is_eval=bool(args.eval_only), device=args.device)
 
     # Optionally switch to EMA copy if requested by CLI or config
     train_state_eval = train_state
