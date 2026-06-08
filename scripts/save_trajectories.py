@@ -126,7 +126,7 @@ def main():
         cfg: Dict[str, Any] = dict(cast(Mapping[str, Any], cfg_any))
 
     # Apply programmatic overrides
-        cfg['data_paths_test'] = [args.dataset]
+        #cfg['data_paths_test'] = [args.dataset]
         cfg['load_checkpoint'] = args.checkpoint
         if args.outdir is not None:
             cfg['checkpoint_path'] = args.outdir
@@ -164,7 +164,7 @@ def main():
         print('Using balanced dataset')
 
         dataset, metadata = build_balanced_dataset(
-            dataset_path=config.data_paths_test[0], 
+            dataset_path=args.dataset, 
             split=args.split, 
             set_name="all", 
             num_examples_per_puzzle=args.k,
@@ -175,7 +175,7 @@ def main():
 
         dataset_config = PuzzleDatasetConfig(
             seed=42,
-            dataset_paths=[args.data_path],
+            dataset_paths=[args.dataset],
             rank=0,
             num_replicas=1,
             test_set_mode=True,
